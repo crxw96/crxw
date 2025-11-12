@@ -17,7 +17,7 @@ intents.reactions = True
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='/', intents=intents, help_command=None)
-        self.initial_extensions = ['features.bump', 'features.reaction_roles']
+        self.initial_extensions = ['features.bump', 'features.reaction_roles', 'features.leveling']
     
     async def setup_hook(self):
         """Load all features when bot starts"""
@@ -67,6 +67,17 @@ async def help_command(interaction: discord.Interaction):
               "`/reactionrole list` - Show all reaction role messages\n"
               "`/reactionrole delete` - Remove a reaction role setup\n"
               "`/reactionrole info` - View role mappings",
+        inline=False
+    )
+    
+    # Leveling commands
+    embed.add_field(
+        name="📊 Leveling System",
+        value="`/rank` - View your rank and level\n"
+              "`/leaderboard` - Server leaderboard\n"
+              "`/leveling setlevelrole` - Set role rewards (admin)\n"
+              "`/leveling levelroles` - List level role rewards\n"
+              "`/leveling settings` - View leveling settings",
         inline=False
     )
     
