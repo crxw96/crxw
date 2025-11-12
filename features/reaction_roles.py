@@ -69,12 +69,20 @@ class ReactionRoles(commands.Cog):
             if ':' not in pair:
                 continue
             
+            # Split only on the first colon to handle role names with colons
             parts = pair.split(':', 1)
             if len(parts) != 2:
                 continue
             
-            emoji = parts[0]
-            role_name = parts[1]
+            emoji = parts[0].strip()
+            role_name = parts[1].strip()
+            
+            # Skip empty values
+            if not emoji or not role_name:
+                continue
+            
+            # Log what we're parsing for debugging
+            print(f"Parsing pair: emoji='{emoji}' (len={len(emoji)}), role='{role_name}'")
             
             # Check if role exists, if not create it
             role = discord.utils.get(interaction.guild.roles, name=role_name)
@@ -94,6 +102,7 @@ class ReactionRoles(commands.Cog):
                 'role_id': role.id,
                 'role_name': role.name
             })
+            print(f"Added mapping: {emoji} -> {role.name}")
         
         if len(role_mappings) == 0:
             await interaction.followup.send("❌ No valid emoji:role pairs found!\n**Example:** `🎮:Valorant 🔫:COD ⚔️:Apex`")
@@ -121,9 +130,13 @@ class ReactionRoles(commands.Cog):
         # Add reactions
         for mapping in role_mappings:
             try:
-                await message.add_reaction(mapping['emoji'])
-            except discord.HTTPException:
-                await interaction.followup.send(f"⚠️ Couldn't add reaction {mapping['emoji']} - invalid emoji?")
+                # Clean the emoji - remove any extra whitespace or formatting
+                emoji = mapping['emoji'].strip()
+                await message.add_reaction(emoji)
+                print(f"✅ Added reaction: {emoji}")
+            except discord.HTTPException as e:
+                print(f"❌ Failed to add reaction '{mapping['emoji']}': {e}")
+                await interaction.followup.send(f"⚠️ Couldn't add reaction {mapping['emoji']} - Error: {e}")
         
         # Store the reaction role data
         message_id = str(message.id)
