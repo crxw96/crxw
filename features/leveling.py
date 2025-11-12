@@ -250,13 +250,29 @@ class Leveling(commands.Cog):
             # Send level up message
             if self.settings['level_up_message']:
                 xp_needed = self.calculate_xp_for_level(new_level)
+                
+                # Choose emoji based on milestone
+                if new_level % 25 == 0:
+                    emoji = "🎊"
+                    title = f"🌟 MILESTONE! Level {new_level}!"
+                elif new_level % 10 == 0:
+                    emoji = "🎉"
+                    title = f"🎉 Major Level Up!"
+                else:
+                    emoji = "⭐"
+                    title = "Level Up!"
+                
                 embed = discord.Embed(
-                    title="🎉 Level Up!",
-                    description=f"{message.author.mention} just reached **Level {new_level}**!",
-                    color=discord.Color.gold()
+                    title=title,
+                    description=f"{message.author.mention} just reached **Level {new_level}**! {emoji}",
+                    color=discord.Color.gold() if new_level % 10 == 0 else discord.Color.green()
                 )
-                embed.add_field(name="XP", value=f"{total_xp:,}", inline=True)
-                embed.add_field(name="Next Level", value=f"{xp_needed:,} XP needed", inline=True)
+                embed.set_thumbnail(url=message.author.display_avatar.url)
+                embed.add_field(
+                    name="Progress",
+                    value=f"**Total XP:** {total_xp:,} 💎\n**Next Level:** {xp_needed:,} XP needed",
+                    inline=False
+                )
                 
                 await message.channel.send(embed=embed)
     
@@ -280,29 +296,52 @@ class Leveling(commands.Cog):
         _, current_level_xp = self.get_level_from_xp(data['xp'])
         progress = (current_level_xp / xp_needed) * 100
         
+        # Choose color based on level
+        if data['level'] >= 50:
+            color = discord.Color.gold()
+        elif data['level'] >= 25:
+            color = discord.Color.purple()
+        elif data['level'] >= 10:
+            color = discord.Color.blue()
+        else:
+            color = discord.Color.green()
+        
         embed = discord.Embed(
-            title=f"📊 Rank Card - {target.display_name}",
-            color=discord.Color.blue()
+            title=f"{target.display_name}'s Profile",
+            description=f"Progress and statistics for {target.mention}",
+            color=color
         )
         embed.set_thumbnail(url=target.display_avatar.url)
         
-        embed.add_field(name="🏆 Rank", value=f"#{rank}", inline=True)
-        embed.add_field(name="⭐ Level", value=str(data['level']), inline=True)
-        embed.add_field(name="💬 Messages", value=f"{data['total_messages']:,}", inline=True)
-        
-        embed.add_field(
-            name="📈 Progress",
-            value=f"`{current_level_xp:,}/{xp_needed:,}` XP ({progress:.1f}%)",
-            inline=False
+        # Stats in a cleaner format
+        stats = (
+            f"**Rank:** #{rank} 🏆\n"
+            f"**Level:** {data['level']} ⭐\n"
+            f"**Total XP:** {data['xp']:,} 💎\n"
+            f"**Messages:** {data['total_messages']:,} 💬"
         )
+        embed.add_field(name="📊 Statistics", value=stats, inline=False)
         
-        # Progress bar
-        bar_length = 20
+        # Progress bar with better visuals
+        bar_length = 15
         filled = int(bar_length * progress / 100)
-        bar = "█" * filled + "░" * (bar_length - filled)
-        embed.add_field(name="Progress Bar", value=f"`{bar}`", inline=False)
+        empty = bar_length - filled
         
-        embed.set_footer(text=f"Total XP: {data['xp']:,}")
+        # Use block characters for smoother progress bar
+        bar = "▰" * filled + "▱" * empty
+        
+        progress_text = (
+            f"**Level {data['level']} → {data['level'] + 1}**\n"
+            f"{bar} {progress:.0f}%\n"
+            f"`{current_level_xp:,} / {xp_needed:,} XP`"
+        )
+        embed.add_field(name="📈 Level Progress", value=progress_text, inline=False)
+        
+        # Add a nice footer
+        embed.set_footer(
+            text=f"Keep chatting to level up! • XP needed: {xp_needed - current_level_xp:,}",
+            icon_url=interaction.guild.icon.url if interaction.guild.icon else None
+        )
         
         await interaction.response.send_message(embed=embed)
     
@@ -317,24 +356,38 @@ class Leveling(commands.Cog):
         
         embed = discord.Embed(
             title=f"🏆 {interaction.guild.name} Leaderboard",
-            description="Top 10 users by level and XP",
+            description="**Top 10 Members by Level**",
             color=discord.Color.gold()
         )
         
-        medals = ["🥇", "🥈", "🥉"]
+        if interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
+        
+        leaderboard_text = ""
         
         for i, user_data in enumerate(top_users, 1):
             user = interaction.guild.get_member(user_data['user_id'])
             if not user:
                 continue
             
-            medal = medals[i-1] if i <= 3 else f"#{i}"
+            # Medals for top 3
+            if i == 1:
+                medal = "🥇"
+            elif i == 2:
+                medal = "🥈"
+            elif i == 3:
+                medal = "🥉"
+            else:
+                medal = f"`#{i:2}`"
             
-            embed.add_field(
-                name=f"{medal} {user.display_name}",
-                value=f"Level {user_data['level']} • {user_data['xp']:,} XP • {user_data['total_messages']:,} messages",
-                inline=False
+            # Create a clean line for each user
+            leaderboard_text += (
+                f"{medal} **{user.display_name}**\n"
+                f"     Level {user_data['level']} • {user_data['xp']:,} XP • {user_data['total_messages']:,} msgs\n\n"
             )
+        
+        embed.add_field(name="Rankings", value=leaderboard_text or "No users found", inline=False)
+        embed.set_footer(text=f"Compete for the top spot! • Total users tracked: {len(top_users)}")
         
         await interaction.response.send_message(embed=embed)
     
@@ -417,14 +470,20 @@ class Leveling(commands.Cog):
         
         embed = discord.Embed(
             title="⭐ Level Role Rewards",
-            description=f"Roles automatically given when reaching levels in {interaction.guild.name}",
-            color=discord.Color.blue()
+            description=f"Roles automatically assigned when reaching specific levels",
+            color=discord.Color.purple()
         )
         
+        roles_text = ""
         for level, role_id in results:
             role = interaction.guild.get_role(role_id)
-            role_mention = role.mention if role else f"Unknown Role (ID: {role_id})"
-            embed.add_field(name=f"Level {level}", value=role_mention, inline=True)
+            if role:
+                roles_text += f"**Level {level}** → {role.mention}\n"
+            else:
+                roles_text += f"**Level {level}** → ⚠️ Role Deleted (ID: {role_id})\n"
+        
+        embed.add_field(name="Configured Rewards", value=roles_text or "None", inline=False)
+        embed.set_footer(text=f"Total role rewards: {len(results)} • Use /leveling setlevelrole to add more")
         
         await interaction.response.send_message(embed=embed)
     
