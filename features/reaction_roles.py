@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import json
 import re
 
@@ -30,69 +31,36 @@ class ReactionRoles(commands.Cog):
             return True
         return member.guild_permissions.administrator or member.guild_permissions.manage_roles
     
-    @commands.command(name='reactionrole')
-    async def reaction_role(self, ctx, action: str = None, *args):
-        """Main reaction role command with subcommands"""
-        if action is None:
-            await ctx.send("❌ Usage: `/reactionrole <create|list|delete|info>`")
-            return
-        
-        action = action.lower()
-        
-        if action == 'create':
-            await self.create_reaction_role(ctx, args)
-        elif action == 'list':
-            await self.list_reaction_roles(ctx)
-        elif action == 'delete':
-            await self.delete_reaction_role(ctx, args)
-        elif action == 'info':
-            await self.info_reaction_role(ctx, args)
-        else:
-            await ctx.send(f"❌ Unknown action: `{action}`. Use: create, list, delete, or info")
+    reactionrole = app_commands.Group(name="reactionrole", description="Manage reaction role messages")
     
-    async def create_reaction_role(self, ctx, args):
+    @reactionrole.command(name='create', description='Create a new reaction role message')
+    @app_commands.describe(
+        category='Category name for this reaction role message',
+        channel='Channel where the message will be posted',
+        title='Title of the reaction role embed',
+        roles='Emoji:Role pairs (e.g., 🎮:Valorant 🔫:COD ⚔️:Apex)'
+    )
+    async def create_reaction_role(
+        self, 
+        interaction: discord.Interaction, 
+        category: str,
+        channel: discord.TextChannel,
+        title: str,
+        roles: str
+    ):
         """Create a new reaction role message"""
         # Check permissions
-        if not self.is_mod_or_owner(ctx.author):
-            await ctx.send("❌ You need to be a moderator or server owner to use this command!")
+        if not self.is_mod_or_owner(interaction.user):
+            await interaction.response.send_message("❌ You need to be a moderator or server owner to use this command!", ephemeral=True)
             return
         
-        # Parse arguments
-        if len(args) < 4:
-            await ctx.send(
-                "❌ Usage: `/reactionrole create <category> <#channel> \"<title>\" <emoji>:<role> <emoji>:<role> ...`\n"
-                "Example: `/reactionrole create games #roles \"Pick your games!\" 🎮:Valorant 🔫:COD`"
-            )
-            return
-        
-        category = args[0]
-        
-        # Parse channel mention
-        channel_mention = args[1]
-        channel_id_match = re.search(r'<#(\d+)>', channel_mention)
-        if not channel_id_match:
-            await ctx.send("❌ Invalid channel! Use a channel mention like #roles")
-            return
-        
-        channel = ctx.guild.get_channel(int(channel_id_match.group(1)))
-        if channel is None:
-            await ctx.send("❌ Channel not found!")
-            return
-        
-        # Parse title (should be in quotes)
-        title_match = re.search(r'"([^"]+)"', ' '.join(args[2:]))
-        if not title_match:
-            await ctx.send('❌ Title must be in quotes! Example: "Pick your roles!"')
-            return
-        
-        title = title_match.group(1)
+        await interaction.response.defer()
         
         # Parse emoji:role pairs
-        remaining_text = ' '.join(args[2:]).replace(f'"{title}"', '').strip()
-        pairs = remaining_text.split()
+        pairs = roles.split()
         
         if len(pairs) == 0:
-            await ctx.send("❌ No emoji:role pairs provided!")
+            await interaction.followup.send("❌ No emoji:role pairs provided!\n**Example:** `🎮:Valorant 🔫:COD ⚔️:Apex`")
             return
         
         role_mappings = []
@@ -109,16 +77,16 @@ class ReactionRoles(commands.Cog):
             role_name = parts[1]
             
             # Check if role exists, if not create it
-            role = discord.utils.get(ctx.guild.roles, name=role_name)
+            role = discord.utils.get(interaction.guild.roles, name=role_name)
             if role is None:
                 try:
-                    role = await ctx.guild.create_role(name=role_name, mentionable=True)
-                    await ctx.send(f"✅ Created new role: {role.mention}")
+                    role = await interaction.guild.create_role(name=role_name, mentionable=True)
+                    await interaction.followup.send(f"✅ Created new role: {role.mention}")
                 except discord.Forbidden:
-                    await ctx.send(f"❌ I don't have permission to create roles!")
+                    await interaction.followup.send(f"❌ I don't have permission to create roles!")
                     return
                 except Exception as e:
-                    await ctx.send(f"❌ Error creating role {role_name}: {e}")
+                    await interaction.followup.send(f"❌ Error creating role {role_name}: {e}")
                     return
             
             role_mappings.append({
@@ -128,7 +96,7 @@ class ReactionRoles(commands.Cog):
             })
         
         if len(role_mappings) == 0:
-            await ctx.send("❌ No valid emoji:role pairs found!")
+            await interaction.followup.send("❌ No valid emoji:role pairs found!\n**Example:** `🎮:Valorant 🔫:COD ⚔️:Apex`")
             return
         
         # Create the embed message
@@ -147,7 +115,7 @@ class ReactionRoles(commands.Cog):
         try:
             message = await channel.send(embed=embed)
         except discord.Forbidden:
-            await ctx.send(f"❌ I don't have permission to send messages in {channel.mention}!")
+            await interaction.followup.send(f"❌ I don't have permission to send messages in {channel.mention}!")
             return
         
         # Add reactions
@@ -155,12 +123,12 @@ class ReactionRoles(commands.Cog):
             try:
                 await message.add_reaction(mapping['emoji'])
             except discord.HTTPException:
-                await ctx.send(f"⚠️ Couldn't add reaction {mapping['emoji']} - invalid emoji?")
+                await interaction.followup.send(f"⚠️ Couldn't add reaction {mapping['emoji']} - invalid emoji?")
         
         # Store the reaction role data
         message_id = str(message.id)
         self.reaction_roles[message_id] = {
-            'guild_id': ctx.guild.id,
+            'guild_id': interaction.guild.id,
             'channel_id': channel.id,
             'category': category,
             'title': title,
@@ -168,17 +136,18 @@ class ReactionRoles(commands.Cog):
         }
         self.save_data()
         
-        await ctx.send(f"✅ Reaction role message created in {channel.mention}! Message ID: `{message.id}`")
+        await interaction.followup.send(f"✅ Reaction role message created in {channel.mention}! Message ID: `{message.id}`")
     
-    async def list_reaction_roles(self, ctx):
+    @reactionrole.command(name='list', description='List all reaction role messages in this server')
+    async def list_reaction_roles(self, interaction: discord.Interaction):
         """List all reaction role messages in this server"""
         guild_messages = {
             msg_id: data for msg_id, data in self.reaction_roles.items()
-            if data['guild_id'] == ctx.guild.id
+            if data['guild_id'] == interaction.guild.id
         }
         
         if not guild_messages:
-            await ctx.send("❌ No reaction role messages found in this server!")
+            await interaction.response.send_message("❌ No reaction role messages found in this server!", ephemeral=True)
             return
         
         embed = discord.Embed(
@@ -188,7 +157,7 @@ class ReactionRoles(commands.Cog):
         )
         
         for msg_id, data in guild_messages.items():
-            channel = ctx.guild.get_channel(data['channel_id'])
+            channel = interaction.guild.get_channel(data['channel_id'])
             channel_name = channel.mention if channel else "Unknown Channel"
             
             roles = ", ".join([mapping['role_name'] for mapping in data['mappings']])
@@ -199,35 +168,33 @@ class ReactionRoles(commands.Cog):
                 inline=False
             )
         
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
     
-    async def delete_reaction_role(self, ctx, args):
+    @reactionrole.command(name='delete', description='Delete a reaction role message')
+    @app_commands.describe(message_id='The ID of the reaction role message to delete')
+    async def delete_reaction_role(self, interaction: discord.Interaction, message_id: str):
         """Delete a reaction role message"""
         # Check permissions
-        if not self.is_mod_or_owner(ctx.author):
-            await ctx.send("❌ You need to be a moderator or server owner to use this command!")
+        if not self.is_mod_or_owner(interaction.user):
+            await interaction.response.send_message("❌ You need to be a moderator or server owner to use this command!", ephemeral=True)
             return
-        
-        if len(args) == 0:
-            await ctx.send("❌ Usage: `/reactionrole delete <message_id>`")
-            return
-        
-        message_id = args[0]
         
         if message_id not in self.reaction_roles:
-            await ctx.send("❌ Reaction role message not found!")
+            await interaction.response.send_message("❌ Reaction role message not found!", ephemeral=True)
             return
         
         data = self.reaction_roles[message_id]
         
         # Verify it's from this guild
-        if data['guild_id'] != ctx.guild.id:
-            await ctx.send("❌ That message is not from this server!")
+        if data['guild_id'] != interaction.guild.id:
+            await interaction.response.send_message("❌ That message is not from this server!", ephemeral=True)
             return
+        
+        await interaction.response.defer()
         
         # Try to delete the actual message
         try:
-            channel = ctx.guild.get_channel(data['channel_id'])
+            channel = interaction.guild.get_channel(data['channel_id'])
             if channel:
                 message = await channel.fetch_message(int(message_id))
                 await message.delete()
@@ -238,28 +205,24 @@ class ReactionRoles(commands.Cog):
         del self.reaction_roles[message_id]
         self.save_data()
         
-        await ctx.send(f"✅ Reaction role message `{message_id}` has been deleted!")
+        await interaction.followup.send(f"✅ Reaction role message `{message_id}` has been deleted!")
     
-    async def info_reaction_role(self, ctx, args):
+    @reactionrole.command(name='info', description='Show detailed info about a reaction role message')
+    @app_commands.describe(message_id='The ID of the reaction role message')
+    async def info_reaction_role(self, interaction: discord.Interaction, message_id: str):
         """Show detailed info about a reaction role message"""
-        if len(args) == 0:
-            await ctx.send("❌ Usage: `/reactionrole info <message_id>`")
-            return
-        
-        message_id = args[0]
-        
         if message_id not in self.reaction_roles:
-            await ctx.send("❌ Reaction role message not found!")
+            await interaction.response.send_message("❌ Reaction role message not found!", ephemeral=True)
             return
         
         data = self.reaction_roles[message_id]
         
         # Verify it's from this guild
-        if data['guild_id'] != ctx.guild.id:
-            await ctx.send("❌ That message is not from this server!")
+        if data['guild_id'] != interaction.guild.id:
+            await interaction.response.send_message("❌ That message is not from this server!", ephemeral=True)
             return
         
-        channel = ctx.guild.get_channel(data['channel_id'])
+        channel = interaction.guild.get_channel(data['channel_id'])
         channel_name = channel.mention if channel else "Unknown Channel"
         
         embed = discord.Embed(
@@ -278,7 +241,7 @@ class ReactionRoles(commands.Cog):
         ])
         embed.add_field(name="Role Mappings", value=mappings_text, inline=False)
         
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
     
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):

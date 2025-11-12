@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands, tasks
+from discord import app_commands
 import json
 from datetime import datetime, timedelta
 
@@ -122,32 +123,32 @@ class BumpReminder(commands.Cog):
         """Wait until bot is ready before starting the loop"""
         await self.bot.wait_until_ready()
     
-    @commands.command(name='bumpstatus')
-    async def bump_status(self, ctx):
+    @app_commands.command(name='bumpstatus', description='Check when the next bump reminder is due')
+    async def bump_status(self, interaction: discord.Interaction):
         """Check when the next bump reminder is due"""
-        guild_id = str(ctx.guild.id)
+        guild_id = str(interaction.guild.id)
         bump_data = self.load_bump_data()
         
         if guild_id not in bump_data:
-            await ctx.send("❌ No bump recorded yet. Wait for someone to use `/bump` with Disboard!")
+            await interaction.response.send_message("❌ No bump recorded yet. Wait for someone to use `/bump` with Disboard!", ephemeral=True)
             return
         
         data = bump_data[guild_id]
         
         if data.get('reminded', False):
-            await ctx.send("✅ Bump reminder has already been sent. Use `/bump` again after bumping!")
+            await interaction.response.send_message("✅ Bump reminder has already been sent. Use `/bump` again after bumping!", ephemeral=True)
             return
         
         bump_ready_time = datetime.fromisoformat(data['bump_time'])
         time_remaining = bump_ready_time - datetime.now()
         
         if time_remaining.total_seconds() <= 0:
-            await ctx.send("🔔 The bump is ready right now!")
+            await interaction.response.send_message("🔔 The bump is ready right now!")
         else:
             minutes_remaining = int(time_remaining.total_seconds() / 60)
             hours = minutes_remaining // 60
             minutes = minutes_remaining % 60
-            await ctx.send(f"⏳ Bump will be ready in **{hours}h {minutes}m**")
+            await interaction.response.send_message(f"⏳ Bump will be ready in **{hours}h {minutes}m**")
 
 async def setup(bot):
     await bot.add_cog(BumpReminder(bot))

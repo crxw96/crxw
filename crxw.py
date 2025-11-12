@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 from dotenv import load_dotenv
 
@@ -10,10 +11,29 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
-intents.members = True  # Needed for role management
-intents.reactions = True  # Needed for reaction roles
+intents.members = True
+intents.reactions = True
 
-bot = commands.Bot(command_prefix='/', intents=intents, help_command=None)
+class Bot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix='/', intents=intents, help_command=None)
+        self.initial_extensions = ['features.bump', 'features.reaction_roles']
+    
+    async def setup_hook(self):
+        """Load all features when bot starts"""
+        for extension in self.initial_extensions:
+            try:
+                await self.load_extension(extension)
+                print(f'✅ Loaded {extension}')
+            except Exception as e:
+                print(f'❌ Failed to load {extension}: {e}')
+        
+        # Sync commands with Discord
+        print("Syncing commands with Discord...")
+        await self.tree.sync()
+        print("✅ Commands synced!")
+
+bot = Bot()
 
 @bot.event
 async def on_ready():
@@ -23,8 +43,8 @@ async def on_ready():
     for cog in bot.cogs:
         print(f'  - {cog}')
 
-@bot.command(name='help')
-async def help_command(ctx):
+@bot.tree.command(name='help', description='Show all bot commands and features')
+async def help_command(interaction: discord.Interaction):
     """Display help information for all features"""
     embed = discord.Embed(
         title="🤖 CRXW Bot - All Features",
@@ -43,39 +63,21 @@ async def help_command(ctx):
     # Reaction role commands
     embed.add_field(
         name="⭐ Reaction Roles",
-        value="`/reactionrole create <category> <#channel> \"<title>\" <emoji>:<role> ...` - Create reaction role message\n"
+        value="`/reactionrole create` - Create a reaction role message\n"
               "`/reactionrole list` - Show all reaction role messages\n"
-              "`/reactionrole delete <message_id>` - Remove a reaction role setup\n"
-              "`/reactionrole info <message_id>` - View role mappings",
+              "`/reactionrole delete` - Remove a reaction role setup\n"
+              "`/reactionrole info` - View role mappings",
         inline=False
     )
     
     embed.set_footer(text="Made with 🔥 | Self-hosted on Raspberry Pi")
-    await ctx.send(embed=embed)
-
-# Load all features
-async def load_extensions():
-    """Load all feature cogs"""
-    features = ['bump', 'reaction_roles']
-    for feature in features:
-        try:
-            await bot.load_extension(f'features.{feature}')
-            print(f'✅ Loaded {feature}')
-        except Exception as e:
-            print(f'❌ Failed to load {feature}: {e}')
+    await interaction.response.send_message(embed=embed)
 
 # Run the bot
 if __name__ == "__main__":
-    import asyncio
-    
     TOKEN = os.getenv('DISCORD_BOT_TOKEN')
     if not TOKEN:
         print("❌ Error: DISCORD_BOT_TOKEN not found in .env file!")
         exit(1)
     
-    async def main():
-        async with bot:
-            await load_extensions()
-            await bot.start(TOKEN)
-    
-    asyncio.run(main())
+    bot.run(TOKEN)
