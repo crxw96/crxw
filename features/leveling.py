@@ -53,16 +53,37 @@ class Leveling(commands.Cog):
         """Load leveling settings from JSON"""
         try:
             with open(self.settings_file, 'r') as f:
-                return json.load(f)
+                settings = json.load(f)
+                # Ensure each guild has its own settings
+                if not isinstance(settings, dict):
+                    return self.get_default_settings()
+                return settings
         except FileNotFoundError:
-            # Default settings
-            return {
-                'xp_per_message_min': 15,
-                'xp_per_message_max': 25,
-                'message_cooldown': 60,  # seconds
-                'level_up_message': True,
-                'level_up_channel': None  # None = same channel as message
-            }
+            return self.get_default_settings()
+    
+    def get_default_settings(self):
+        """Get default settings structure"""
+        return {
+            'xp_per_message_min': 15,
+            'xp_per_message_max': 25,
+            'message_cooldown': 60,  # seconds
+            'level_up_message': True,
+        }
+    
+    def get_guild_setting(self, guild_id, key, default=None):
+        """Get a specific guild setting"""
+        guild_id_str = str(guild_id)
+        if guild_id_str not in self.settings:
+            self.settings[guild_id_str] = {}
+        return self.settings[guild_id_str].get(key, default)
+    
+    def set_guild_setting(self, guild_id, key, value):
+        """Set a specific guild setting"""
+        guild_id_str = str(guild_id)
+        if guild_id_str not in self.settings:
+            self.settings[guild_id_str] = {}
+        self.settings[guild_id_str][key] = value
+        self.save_settings()
     
     def save_settings(self):
         """Save leveling settings to JSON"""
@@ -224,10 +245,11 @@ class Leveling(commands.Cog):
         # Check cooldown
         cooldown_key = f"{guild_id}_{user_id}"
         current_time = time.time()
+        cooldown_duration = self.get_guild_setting(guild_id, 'message_cooldown', 60)
         
         if cooldown_key in self.xp_cooldowns:
             time_since_last = current_time - self.xp_cooldowns[cooldown_key]
-            if time_since_last < self.settings['message_cooldown']:
+            if time_since_last < cooldown_duration:
                 return  # Still on cooldown
         
         # Update cooldown
@@ -235,10 +257,9 @@ class Leveling(commands.Cog):
         
         # Award random XP within configured range
         import random
-        xp_gain = random.randint(
-            self.settings['xp_per_message_min'],
-            self.settings['xp_per_message_max']
-        )
+        xp_min = self.get_guild_setting(guild_id, 'xp_per_message_min', 15)
+        xp_max = self.get_guild_setting(guild_id, 'xp_per_message_max', 25)
+        xp_gain = random.randint(xp_min, xp_max)
         
         leveled_up, new_level, total_xp = self.add_xp(guild_id, user_id, xp_gain)
         
@@ -248,7 +269,19 @@ class Leveling(commands.Cog):
             await self.assign_level_roles(message.author, new_level)
             
             # Send level up message
-            if self.settings['level_up_message']:
+            if self.get_guild_setting(guild_id, 'level_up_message', True):
+                # Get dedicated level-up channel
+                level_channel_id = self.get_guild_setting(guild_id, 'level_up_channel', None)
+                
+                if level_channel_id:
+                    level_channel = message.guild.get_channel(level_channel_id)
+                    if not level_channel:
+                        # Channel was deleted, fall back to current channel
+                        level_channel = message.channel
+                else:
+                    # No dedicated channel set, use current channel
+                    level_channel = message.channel
+                
                 xp_needed = self.calculate_xp_for_level(new_level)
                 
                 # Choose emoji based on milestone
@@ -274,7 +307,11 @@ class Leveling(commands.Cog):
                     inline=False
                 )
                 
-                await message.channel.send(embed=embed)
+                try:
+                    await level_channel.send(embed=embed)
+                except discord.Forbidden:
+                    # Bot doesn't have permission in that channel
+                    print(f"❌ No permission to send level-up message in {level_channel.name}")
     
     @app_commands.command(name='rank', description='Check your or someone else\'s rank and level')
     @app_commands.describe(user='The user to check (optional, defaults to you)')
@@ -490,28 +527,77 @@ class Leveling(commands.Cog):
     @leveling_group.command(name='settings', description='View leveling system settings')
     async def view_settings(self, interaction: discord.Interaction):
         """View current leveling settings"""
+        guild_id = interaction.guild.id
+        
         embed = discord.Embed(
             title="⚙️ Leveling Settings",
             color=discord.Color.blue()
         )
         
+        xp_min = self.get_guild_setting(guild_id, 'xp_per_message_min', 15)
+        xp_max = self.get_guild_setting(guild_id, 'xp_per_message_max', 25)
+        cooldown = self.get_guild_setting(guild_id, 'message_cooldown', 60)
+        level_up_enabled = self.get_guild_setting(guild_id, 'level_up_message', True)
+        level_channel_id = self.get_guild_setting(guild_id, 'level_up_channel', None)
+        
         embed.add_field(
             name="XP Per Message",
-            value=f"{self.settings['xp_per_message_min']}-{self.settings['xp_per_message_max']} XP",
+            value=f"{xp_min}-{xp_max} XP",
             inline=True
         )
         embed.add_field(
             name="Message Cooldown",
-            value=f"{self.settings['message_cooldown']} seconds",
+            value=f"{cooldown} seconds",
             inline=True
         )
         embed.add_field(
             name="Level Up Messages",
-            value="✅ Enabled" if self.settings['level_up_message'] else "❌ Disabled",
+            value="✅ Enabled" if level_up_enabled else "❌ Disabled",
             inline=True
         )
         
+        if level_channel_id:
+            channel = interaction.guild.get_channel(level_channel_id)
+            channel_mention = channel.mention if channel else f"⚠️ Channel Deleted (ID: {level_channel_id})"
+        else:
+            channel_mention = "Same as message channel"
+        
+        embed.add_field(
+            name="Level-Up Channel",
+            value=channel_mention,
+            inline=False
+        )
+        
         await interaction.response.send_message(embed=embed)
+    
+    @leveling_group.command(name='setchannel', description='Set a dedicated channel for level-up announcements')
+    @app_commands.describe(channel='The channel where level-up messages will be posted')
+    async def set_level_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        """Set the level-up announcement channel"""
+        # Check permissions
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You need Administrator permission to use this!", ephemeral=True)
+            return
+        
+        self.set_guild_setting(interaction.guild.id, 'level_up_channel', channel.id)
+        
+        await interaction.response.send_message(
+            f"✅ Level-up announcements will now be posted in {channel.mention}!"
+        )
+    
+    @leveling_group.command(name='removechannel', description='Remove the dedicated level-up channel (use current channel)')
+    async def remove_level_channel(self, interaction: discord.Interaction):
+        """Remove the dedicated level-up channel"""
+        # Check permissions
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You need Administrator permission to use this!", ephemeral=True)
+            return
+        
+        self.set_guild_setting(interaction.guild.id, 'level_up_channel', None)
+        
+        await interaction.response.send_message(
+            "✅ Level-up announcements will now appear in the same channel where users level up!"
+        )
 
 async def setup(bot):
     await bot.add_cog(Leveling(bot))

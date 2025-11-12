@@ -77,6 +77,7 @@ async def help_command(interaction: discord.Interaction):
               "`/leaderboard` - Server leaderboard\n"
               "`/leveling setlevelrole` - Set role rewards (admin)\n"
               "`/leveling levelroles` - List level role rewards\n"
+              "`/leveling setchannel` - Set level-up announcement channel (admin)\n"
               "`/leveling settings` - View leveling settings",
         inline=False
     )
