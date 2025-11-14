@@ -17,7 +17,7 @@ intents.reactions = True
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='/', intents=intents, help_command=None)
-        self.initial_extensions = ['features.bump', 'features.reaction_roles', 'features.leveling', 'features.stream_alerts']
+        self.initial_extensions = ['features.bump', 'features.reaction_roles', 'features.leveling', 'features.stream_alerts', 'features.moderation', 'features.welcome']
     
     async def setup_hook(self):
         """Load all features when bot starts"""
@@ -90,6 +90,32 @@ async def help_command(interaction: discord.Interaction):
               "`/streamalerts settwitch` - Set Twitch username (admin)\n"
               "`/streamalerts setyoutube` - Set YouTube channel ID (admin)\n"
               "`/streamalerts settings` - View current settings",
+        inline=False
+    )
+
+    # Moderation commands
+    embed.add_field(
+        name="🛡️ Moderation",
+        value="`/warn` - Warn a user\n"
+              "`/warnings` - View user warnings\n"
+              "`/clearwarnings` - Clear user warnings\n"
+              "`/timeout` - Timeout a user\n"
+              "`/kick` - Kick a user\n"
+              "`/ban` - Ban a user\n"
+              "`/modsettings setlogchannel` - Set mod log channel (admin)\n"
+              "`/modsettings view` - View moderation settings",
+        inline=False
+    )
+
+    # Welcome system commands
+    embed.add_field(
+        name="👋 Welcome System",
+        value="`/welcome setchannel` - Set welcome channel (admin)\n"
+              "`/welcome setmessage` - Set welcome message (admin)\n"
+              "`/welcome setautorole` - Set auto-role (admin)\n"
+              "`/welcome toggledm` - Toggle DM welcomes (admin)\n"
+              "`/welcome settings` - View welcome settings\n"
+              "`/welcome test` - Test welcome message",
         inline=False
     )
 
