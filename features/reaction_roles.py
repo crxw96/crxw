@@ -326,6 +326,124 @@ class ReactionRoles(commands.Cog):
 
         await interaction.followup.send(f"✅ Professional reaction role message created in {channel.mention}! Message ID: `{message.id}`")
 
+    @reactionrole.command(name='createclean', description='Create a clean, simple reaction role message (like the screenshot style)')
+    @app_commands.describe(
+        channel='Channel where the message will be posted',
+        roles='Emoji:Role pairs (e.g., 🎮:Valorant 🔫:COD ⚔️:Apex)',
+        image='Optional image/GIF URL to attach'
+    )
+    async def create_clean_reaction_role(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        roles: str,
+        image: str = None
+    ):
+        """Create a clean, simple reaction role message"""
+        # Check permissions
+        if not self.is_mod_or_owner(interaction.user):
+            await interaction.response.send_message("❌ You need to be a moderator or server owner to use this command!", ephemeral=True)
+            return
+
+        await interaction.response.defer()
+
+        # Parse emoji:role pairs
+        pairs = roles.split()
+
+        if len(pairs) == 0:
+            await interaction.followup.send("❌ No emoji:role pairs provided!\n**Example:** `🎮:Valorant 🔫:COD ⚔️:Apex`")
+            return
+
+        role_mappings = []
+
+        for pair in pairs:
+            if ':' not in pair:
+                continue
+
+            parts = pair.split(':', 1)
+            if len(parts) != 2:
+                continue
+
+            emoji = parts[0].strip()
+            role_name = parts[1].strip()
+
+            if not emoji or not role_name:
+                continue
+
+            # Check if role exists, if not create it
+            role = discord.utils.get(interaction.guild.roles, name=role_name)
+            if role is None:
+                try:
+                    role = await interaction.guild.create_role(name=role_name, mentionable=True)
+                    await interaction.followup.send(f"✅ Created new role: {role.mention}")
+                except discord.Forbidden:
+                    await interaction.followup.send(f"❌ I don't have permission to create roles!")
+                    return
+                except Exception as e:
+                    await interaction.followup.send(f"❌ Error creating role {role_name}: {e}")
+                    return
+
+            role_mappings.append({
+                'emoji': emoji,
+                'role_id': role.id,
+                'role_name': role.name
+            })
+
+        if len(role_mappings) == 0:
+            await interaction.followup.send("❌ No valid emoji:role pairs found!")
+            return
+
+        # Build clean message content
+        message_content = ""
+        for mapping in role_mappings:
+            # Get the role object to mention it
+            role = interaction.guild.get_role(mapping['role_id'])
+            if role:
+                message_content += f"• {mapping['emoji']} {role.mention}\n"
+
+        # Send message with optional image
+        try:
+            if image:
+                # Send with image attachment
+                message = await channel.send(content=message_content, suppress_embeds=True)
+                # Send image as a follow-up to avoid auto-embed
+                await channel.send(image)
+                # Get the first message for reactions
+                message_to_react = message
+            else:
+                # Send without image
+                message = await channel.send(content=message_content)
+                message_to_react = message
+        except discord.Forbidden:
+            await interaction.followup.send(f"❌ I don't have permission to send messages in {channel.mention}!")
+            return
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error sending message: {e}")
+            return
+
+        # Add reactions
+        for mapping in role_mappings:
+            try:
+                emoji = mapping['emoji'].strip()
+                await message_to_react.add_reaction(emoji)
+            except discord.HTTPException as e:
+                print(f"❌ Failed to add reaction '{mapping['emoji']}': {e}")
+                await interaction.followup.send(f"⚠️ Couldn't add reaction {mapping['emoji']}")
+
+        # Store the reaction role data
+        message_id = str(message_to_react.id)
+        self.reaction_roles[message_id] = {
+            'guild_id': interaction.guild.id,
+            'channel_id': channel.id,
+            'category': 'Clean Style',
+            'title': 'Clean Reaction Roles',
+            'mappings': role_mappings,
+            'style': 'clean'
+        }
+        self.save_data()
+
+        await interaction.followup.send(f"✅ Clean reaction role message created in {channel.mention}! Message ID: `{message.id}`")
+
     @reactionrole.command(name='list', description='List all reaction role messages in this server')
     async def list_reaction_roles(self, interaction: discord.Interaction):
         """List all reaction role messages in this server"""

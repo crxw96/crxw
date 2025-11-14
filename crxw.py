@@ -64,7 +64,8 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="⭐ Reaction Roles",
         value="`/reactionrole create` - Create a simple reaction role message\n"
-              "`/reactionrole createpro` - Create an impressive reaction role with custom styling ✨\n"
+              "`/reactionrole createpro` - Create with custom colors & images ✨\n"
+              "`/reactionrole createclean` - Create clean simple style (recommended!) 🎨\n"
               "`/reactionrole list` - Show all reaction role messages\n"
               "`/reactionrole delete` - Remove a reaction role setup\n"
               "`/reactionrole info` - View role mappings",
