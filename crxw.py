@@ -17,7 +17,7 @@ intents.reactions = True
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='/', intents=intents, help_command=None)
-        self.initial_extensions = ['features.bump', 'features.reaction_roles', 'features.leveling']
+        self.initial_extensions = ['features.bump', 'features.reaction_roles', 'features.leveling', 'features.stream_alerts']
     
     async def setup_hook(self):
         """Load all features when bot starts"""
@@ -81,7 +81,18 @@ async def help_command(interaction: discord.Interaction):
               "`/leveling settings` - View leveling settings",
         inline=False
     )
-    
+
+    # Stream alerts commands
+    embed.add_field(
+        name="🔴 Stream & Video Alerts",
+        value="`/streamalerts setchannel` - Set notification channel (admin)\n"
+              "`/streamalerts setrole` - Set notification role (admin)\n"
+              "`/streamalerts settwitch` - Set Twitch username (admin)\n"
+              "`/streamalerts setyoutube` - Set YouTube channel ID (admin)\n"
+              "`/streamalerts settings` - View current settings",
+        inline=False
+    )
+
     embed.set_footer(text="Made with 🔥 | Self-hosted on Raspberry Pi")
     await interaction.response.send_message(embed=embed)
 
