@@ -34,7 +34,8 @@ class Welcome(commands.Cog):
                 'welcome_message': 'Welcome {mention} to **{server}**! 👋\n\nYou are member #{member_count}!',
                 'auto_role_id': None,
                 'dm_welcome': False,
-                'dm_message': 'Welcome to **{server}**! We\'re glad to have you here. Make sure to read the rules!'
+                'dm_message': 'Welcome to **{server}**! We\'re glad to have you here. Make sure to read the rules!',
+                'leave_channel_id': None
             }
             self.save_settings()
         return self.settings[guild_id_str]
@@ -102,6 +103,54 @@ class Welcome(commands.Cog):
                     print(f"✅ Assigned {role.name} to {member.name}")
                 except Exception as e:
                     print(f"❌ Error assigning auto-role: {e}")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member):
+        """Handle when a member leaves the server"""
+        settings = self.get_guild_settings(member.guild.id)
+
+        # Send leave notification to channel
+        leave_channel_id = settings.get('leave_channel_id')
+        if leave_channel_id:
+            channel = member.guild.get_channel(leave_channel_id)
+            if channel:
+                # Calculate how long they were in the server
+                join_date = member.joined_at
+                if join_date:
+                    time_in_server = datetime.now(join_date.tzinfo) - join_date
+                    days = time_in_server.days
+                    hours = time_in_server.seconds // 3600
+
+                    if days > 0:
+                        duration = f"{days} day{'s' if days != 1 else ''}"
+                    elif hours > 0:
+                        duration = f"{hours} hour{'s' if hours != 1 else ''}"
+                    else:
+                        duration = "less than an hour"
+                else:
+                    duration = "Unknown"
+
+                # Create leave embed
+                embed = discord.Embed(
+                    title="👋 Member Left",
+                    description=f"**{member.name}** has left the server",
+                    color=discord.Color.red(),
+                    timestamp=datetime.now()
+                )
+                embed.set_thumbnail(url=member.display_avatar.url)
+                embed.add_field(name="User", value=f"{member.mention}\n{member.name}#{member.discriminator}", inline=True)
+                embed.add_field(name="Time in Server", value=duration, inline=True)
+                embed.add_field(name="Members Now", value=f"{member.guild.member_count}", inline=True)
+
+                if join_date:
+                    embed.add_field(name="Joined", value=f"<t:{int(join_date.timestamp())}:R>", inline=True)
+
+                embed.set_footer(text=f"User ID: {member.id}")
+
+                try:
+                    await channel.send(embed=embed)
+                except Exception as e:
+                    print(f"Error sending leave notification: {e}")
 
     # Welcome settings group
     welcomesettings = app_commands.Group(name="welcome", description="Configure welcome system")
@@ -270,6 +319,14 @@ class Welcome(commands.Cog):
             dm_preview = self.format_message(dm_message, interaction.user)
             embed.add_field(name="DM Message Preview", value=dm_preview, inline=False)
 
+        # Leave channel
+        leave_channel_id = settings.get('leave_channel_id')
+        if leave_channel_id:
+            leave_channel = interaction.guild.get_channel(leave_channel_id)
+            embed.add_field(name="Leave Notification Channel", value=leave_channel.mention if leave_channel else "Channel not found", inline=False)
+        else:
+            embed.add_field(name="Leave Notification Channel", value="❌ Not set", inline=False)
+
         await interaction.response.send_message(embed=embed)
 
     @welcomesettings.command(name='test', description='Test the welcome message with yourself')
@@ -294,6 +351,39 @@ class Welcome(commands.Cog):
         embed.set_footer(text="This is how the welcome message will look")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @welcomesettings.command(name='setleavechannel', description='Set the leave notification channel')
+    @app_commands.describe(channel='The channel where leave notifications will be sent')
+    async def set_leave_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        """Set leave notification channel"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You need administrator permission to use this command!", ephemeral=True)
+            return
+
+        guild_id = str(interaction.guild.id)
+        if guild_id not in self.settings:
+            self.settings[guild_id] = {}
+
+        self.settings[guild_id]['leave_channel_id'] = channel.id
+        self.save_settings()
+
+        await interaction.response.send_message(f"✅ Leave notifications will be sent to {channel.mention}")
+
+    @welcomesettings.command(name='removeleavechannel', description='Remove the leave notification channel')
+    async def remove_leave_channel(self, interaction: discord.Interaction):
+        """Remove leave notification channel"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You need administrator permission to use this command!", ephemeral=True)
+            return
+
+        guild_id = str(interaction.guild.id)
+        if guild_id not in self.settings:
+            self.settings[guild_id] = {}
+
+        self.settings[guild_id]['leave_channel_id'] = None
+        self.save_settings()
+
+        await interaction.response.send_message("✅ Leave notifications have been disabled")
 
 async def setup(bot):
     await bot.add_cog(Welcome(bot))

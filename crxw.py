@@ -109,11 +109,12 @@ async def help_command(interaction: discord.Interaction):
 
     # Welcome system commands
     embed.add_field(
-        name="👋 Welcome System",
+        name="👋 Welcome & Leave System",
         value="`/welcome setchannel` - Set welcome channel (admin)\n"
               "`/welcome setmessage` - Set welcome message (admin)\n"
               "`/welcome setautorole` - Set auto-role (admin)\n"
               "`/welcome toggledm` - Toggle DM welcomes (admin)\n"
+              "`/welcome setleavechannel` - Set leave notification channel (admin)\n"
               "`/welcome settings` - View welcome settings\n"
               "`/welcome test` - Test welcome message",
         inline=False
