@@ -239,19 +239,19 @@ class ReactionRoles(commands.Cog):
             except:
                 await interaction.followup.send("⚠️ Invalid color format, using default purple")
 
-        # Build custom description
+        # Build custom description with clean formatting
         if description:
-            embed_description = f"{description}\n\n"
+            embed_description = f"*{description}*\n\n"
         else:
             embed_description = ""
 
-        embed_description += "╭─────────────────────────────╮\n"
-        embed_description += "│  **React to claim your roles!**  │\n"
-        embed_description += "╰─────────────────────────────╯\n\n"
+        # Add clean header
+        embed_description += "**React below to get your roles:**\n"
+        embed_description += "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        # Format roles beautifully
+        # Format roles cleanly with better spacing
         for mapping in role_mappings:
-            embed_description += f"{mapping['emoji']}  ➜  **{mapping['role_name']}**\n"
+            embed_description += f"{mapping['emoji']} **{mapping['role_name']}**\n"
 
         # Create the enhanced embed
         embed = discord.Embed(
@@ -261,9 +261,9 @@ class ReactionRoles(commands.Cog):
             timestamp=discord.utils.utcnow()
         )
 
-        # Set author (category)
+        # Set author (category) - cleaner without emoji
         embed.set_author(
-            name=f"🎭 {category}",
+            name=category,
             icon_url=interaction.guild.icon.url if interaction.guild.icon else None
         )
 
@@ -289,7 +289,7 @@ class ReactionRoles(commands.Cog):
 
         # Footer
         embed.set_footer(
-            text="✨ Click the reactions below to get your roles!",
+            text="Click the reactions below to get your roles",
             icon_url=self.bot.user.display_avatar.url if self.bot.user else None
         )
 
