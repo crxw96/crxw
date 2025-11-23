@@ -17,7 +17,7 @@ intents.reactions = True
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='/', intents=intents, help_command=None)
-        self.initial_extensions = ['features.bump', 'features.reaction_roles', 'features.leveling', 'features.stream_alerts', 'features.moderation', 'features.welcome']
+        self.initial_extensions = ['features.bump', 'features.reaction_roles', 'features.leveling', 'features.stream_alerts', 'features.moderation', 'features.welcome', 'features.giveaway', 'features.automod']
     
     async def setup_hook(self):
         """Load all features when bot starts"""
@@ -119,6 +119,28 @@ async def help_command(interaction: discord.Interaction):
               "`/welcome setleavechannel` - Set leave notification channel (admin)\n"
               "`/welcome settings` - View welcome settings\n"
               "`/welcome test` - Test welcome message",
+        inline=False
+    )
+
+    # Giveaway commands
+    embed.add_field(
+        name="🎁 Giveaway System",
+        value="`/giveaway start` - Start a new giveaway (admin)\n"
+              "`/giveaway end` - End a giveaway early (admin)\n"
+              "`/giveaway reroll` - Reroll giveaway winners (admin)\n"
+              "`/giveaway list` - List all active giveaways",
+        inline=False
+    )
+
+    # AutoMod commands
+    embed.add_field(
+        name="🤖 Auto-Moderation",
+        value="`/automod spam` - Configure spam detection (admin)\n"
+              "`/automod links` - Configure link filtering (admin)\n"
+              "`/automod badwords` - Configure bad word filter (admin)\n"
+              "`/automod raid` - Configure raid protection (admin)\n"
+              "`/automod logchannel` - Set automod log channel (admin)\n"
+              "`/automod settings` - View automod settings",
         inline=False
     )
 
